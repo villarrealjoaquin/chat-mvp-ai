@@ -42,7 +42,6 @@ export function ProductDetail() {
   const [error, setError] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [message, setMessage] = useState("");
-  const [reply, setReply] = useState<Message | null>(null);
   const { id } = useParams();
 
   const handleAddNewMessage = async (
@@ -69,28 +68,25 @@ export function ProductDetail() {
 
       setMessages((prevMessages) => [...prevMessages, assistantMessage]);
 
-      console.log("entre");
       const reply = await engine.chat.completions.create({
         messages: currentMessages,
       });
       console.log(reply, "reply");
-      const systemAssistantMessage = reply.choices[0].message.content ?? "";
-      const serializarBotMessage = systemAssistantMessage
-        .split(" ")
+      const AssistantReply = reply.choices[0].message.content ?? "";
+      const serializarBotMessage = AssistantReply.split(" ")
         .filter((word) => !word.match(/https?:\/\/[^\s]+/g))
         .join(" ");
-
-      console.log(serializarBotMessage, "serializarBotMessage");
-
-      const images = extractImageUrls(systemAssistantMessage);
-      console.log(images, "images");
-
-      const botMessage: Message = {
+      const images = extractImageUrls(AssistantReply);
+      const newAssistantMessage: Message = {
         role: "assistant",
         content: serializarBotMessage,
         imagesUrls: images,
       };
-      setReply(botMessage);
+      setMessages((prevMessages) => {
+        const updatedMessages = [...prevMessages];
+        updatedMessages[updatedMessages.length - 1] = newAssistantMessage;
+        return updatedMessages;
+      });
       return;
     }
 
@@ -129,28 +125,6 @@ export function ProductDetail() {
   };
 
   useEffect(() => {
-    if (reply) {
-      setMessages((prevMessages) => {
-        // Crear una copia del arreglo de mensajes previos
-        const updatedMessages = [...prevMessages];
-        
-        // Modificar el último mensaje (asistente)
-        updatedMessages[updatedMessages.length - 1] = {
-          ...updatedMessages[updatedMessages.length - 1],
-          role: "assistant",
-          content: reply.content,
-          imagesUrls: reply.imagesUrls,
-        };
-        
-        // Devolver el arreglo actualizado
-        return updatedMessages;
-      });
-  
-      setReply(null); // Limpiar el estado de 'reply' después de procesar el mensaje
-    }
-  }, [reply]);
-
-  useEffect(() => {
     if (id) {
       setLoading(true);
       fetch(`https://fakestoreapi.com/products/${id}`)
@@ -161,7 +135,7 @@ export function ProductDetail() {
           return response.json();
         })
         .then((data) => {
-          const updateData = {
+          const populateData = {
             ...data,
             relatedProduct: [
               {
@@ -175,30 +149,56 @@ export function ProductDetail() {
               },
               {
                 id: 3,
-                title: "Remera gucci",
+                title: "Zapatos de mujer",
                 price: 20.99,
-                description: "Remera de gucci",
+                description: "Zapatos de mujer",
                 category: "Category 2",
                 image:
                   "https://tse3.mm.bing.net/th?id=OIP.t9O30QXGByQnw3zWXX-_UwHaKN&pid=Api&P=0&h=180",
               },
             ],
           };
-          setProduct(updateData);
+          setProduct(populateData);
+
           setMessages([
             {
               role: "system",
-              content: `Estás asistiendo al usuario sobre el producto "${
-                data.title
-              }". Aquí está la información del producto: título: "${
-                data.title
-              }", precio: $${data.price}, descripción: "${
-                data.description
-              }", categoría: "${
-                data.category
-              }", stock:22. Responde cualquier pregunta que el usuario tenga sobre este producto de manera clara y útil. Si la pregunta del usuario no es sobre el producto o no tienes esa información del producto, responde con "No tengo esa información". y un email random para contactarse. La primer respuesta tiene que ser corta. Como te vuelvo a repetir si no tenes esa informacion no respondas afirmativamente dale un mail o numero de contacto. No pongas siempre el nombre del producto solo cuando te lo especifiquen, usa algo mas generico. Cuando te pregunte sobre con que puedo combinar la prenda necesito que me respondas con las url plana sin ningun formato de las imagenes sin [] que estan guardadas, no repitas urls. tenes que mostrar la cantidad de imagenes que estan guardadas si son 2 productos mostra 2 urls/imagenes. Productos relacionados: ${updateData.relatedProduct
+              content: `
+              Estás asistiendo al usuario con información sobre un producto específico. A continuación, se te proporcionan las reglas para responder:
+    
+              **Información del producto principal**:
+              - Título: "${data.title}".
+              - Precio: $${data.price}.
+              - Descripción: "${data.description}".
+              - Categoría: "${data.category}".
+              - Stock: 22.
+    
+              **Productos relacionados**:
+              - ${populateData.relatedProduct
+                .map(
+                  (relatedProduct: Product) =>
+                    `Título: "${relatedProduct.title}", Precio: $${relatedProduct.price}, Imagen: ${relatedProduct.image}`
+                )
+                .join("\n- ")}
+    
+              **Reglas para responder**:
+              1. Responde cualquier pregunta sobre este producto de manera clara y útil.
+              2. Si la pregunta del usuario no está relacionada con este producto o no tienes información suficiente, responde con:
+                 - "No tengo esa información. Por favor, contacta con soporte: soporte@fakestore.com."
+              3. Cuando el usuario pregunte con qué puede combinar la prenda, responde únicamente con URLs planas de las imágenes de productos relacionados. 
+                 - Ejemplo: si hay 2 productos relacionados, responde con 2 URLs (una por cada producto).
+                 - No repitas las URLs ni añadas formato adicional (sin corchetes ni otros caracteres).
+    
+              **Ejemplo de respuesta para productos relacionados**:
+              ${populateData.relatedProduct
                 .map((relatedProduct: Product) => relatedProduct.image)
-                .join(",")}`,
+                .join("\n")}
+    
+              **Estilo de respuesta**:
+              - La primera respuesta debe ser breve y directa.
+              - No uses el nombre del producto en todas las respuestas a menos que el usuario lo especifique.
+              - Utiliza expresiones más genéricas como "este artículo" o "la prenda" para hacer las respuestas más fluidas.
+              `,
             },
           ]);
         })
