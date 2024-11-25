@@ -36,8 +36,6 @@ const engine = new MLCEngine({
   },
 });
 
-const keywords = ["relacionados", "similares"];
-
 export function ProductDetail() {
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState(true);
